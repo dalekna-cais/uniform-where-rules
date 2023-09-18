@@ -1,3 +1,5 @@
+import { pathOr } from "./utils";
+
 type Operators =
   | "_eq"
   | "_neq"
@@ -16,9 +18,11 @@ type ConditionValue = {
   message?: string;
 };
 
-type WhereCondition<FormValues extends Record<string, any>> = Partial<
-  Record<keyof FormValues, Partial<Record<Operators, ConditionValue>>>
->;
+type WhereCondition<FormValues extends Record<string, any>> =
+  NestedWhereFilters<FormValues> &
+    Partial<
+      Record<keyof FormValues, Partial<Record<Operators, ConditionValue>>>
+    >;
 
 type NestedWhereFilters<FormValues extends Record<string, any>> = {
   _and?: WhereCondition<FormValues>[];
@@ -29,91 +33,127 @@ type NestedWhereFilters<FormValues extends Record<string, any>> = {
 type WhereInput<FormValues extends Record<string, any>> =
   NestedWhereFilters<FormValues> & WhereCondition<FormValues>;
 
-function evaluateWhereFilters<FormValues extends Record<string, any>>(
+function getStuff<FormValues extends Record<string, any>>(
   where: WhereInput<FormValues>,
   data: Record<string, any>
-): boolean | string {
-  if (where._and) {
-    return where._and.every((condition) =>
-      evaluateWhereFilters(condition, data)
-    );
-  }
+) {
+  const messages: string[] = [];
 
-  if (where._or) {
-    return where._or.some((condition) => evaluateWhereFilters(condition, data));
-  }
+  function evaluateWhereFilters<FormValues extends Record<string, any>>(
+    where: WhereInput<FormValues>,
+    data: Record<string, any>
+  ): boolean {
+    if (where._and) {
+      return where._and.every((condition) =>
+        evaluateWhereFilters(condition, data)
+      );
+    }
+    if (where._or) {
+      return where._or.some((condition) =>
+        evaluateWhereFilters(condition, data)
+      );
+    }
+    if (where._not) {
+      return !evaluateWhereFilters(where._not, data);
+    }
 
-  if (where._not) {
-    return !evaluateWhereFilters(where._not, data);
-  }
+    // TODO: all other that starts with _
 
-  const result = Object.entries(input).map(([fieldId, where]) => {
-    for (const fieldId in where) {
-      if (fieldId.startsWith("_")) continue;
+    const fieldKeys = Object.keys(where).filter((key) => !key.startsWith("_"));
 
-      const whereFilters = where[fieldId];
+    for (const key of fieldKeys) {
+      const fieldConditions = where[key];
+      if (fieldConditions) {
+        const fieldValue = pathOr("", key.split("."), data);
+        const operatorKeys = Object.keys(fieldConditions) as Operators[];
 
-      for (const operator in whereFilters) {
-        const { value, errorMessage } = whereFilters[operator];
+        for (const operator of operatorKeys) {
+          const condition = fieldConditions[operator];
+          if (!condition) break;
+          const conditionValue = condition.value;
+          const defaultMessage = `Validation failed for field "${key}" with operator ${operator}`;
 
-        switch (operator) {
-          case "_eq":
-            if (data[fieldId] !== value) return errorMessage || false;
-            break;
-          case "_neq":
-            if (data[fieldId] === value) return errorMessage || false;
-            break;
-          case "_lt":
-            if (data[fieldId] >= value) return errorMessage || false;
-            break;
-          case "_lte":
-            if (data[fieldId] > value) return errorMessage || false;
-            break;
-          case "_gt":
-            if (data[fieldId] <= value) return errorMessage || false;
-            break;
-          case "_gte":
-            if (data[fieldId] < value) return errorMessage || false;
-            break;
-          case "_in":
-            if (!value.includes(data[fieldId])) return errorMessage || false;
-            break;
-          case "_nin":
-            if (value.includes(data[fieldId])) return errorMessage || false;
-            break;
-          case "_is_null":
-            if ((value && data[fieldId]) || (!value && data[fieldId]))
-              return errorMessage || false;
-            break;
-          case "_like":
-            if (!data[fieldId].includes(value)) return errorMessage || false;
-            break;
-          case "_ilike":
-            if (!data[fieldId].toLowerCase().includes(value.toLowerCase()))
-              return errorMessage || false;
-            break;
-          default:
-            throw new Error(`Unknown operator: ${operator}`);
+          switch (operator) {
+            case "_eq":
+              if (fieldValue !== conditionValue) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_neq":
+              if (fieldValue === conditionValue) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_lt":
+              if (!(fieldValue < conditionValue)) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_lte":
+              if (!(fieldValue <= conditionValue)) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_gt":
+              if (!(fieldValue > conditionValue)) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_gte":
+              if (!(fieldValue >= conditionValue)) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_in":
+              if (!conditionValue.includes(fieldValue)) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_nin":
+              if (conditionValue.includes(fieldValue)) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_is_null":
+              if (fieldValue !== null) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_like":
+              if (!new RegExp(conditionValue).test(fieldValue)) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            case "_ilike":
+              if (!new RegExp(conditionValue, "i").test(fieldValue)) {
+                messages.push(condition.message ?? defaultMessage);
+              }
+              break;
+            default:
+              break;
+          }
         }
       }
     }
 
-    return true;
-  });
+    return messages.every(Boolean);
+  }
 
-  return result.every(Boolean);
+  evaluateWhereFilters(where, data);
+
+  return messages;
 }
 
 const whereFilters: WhereInput<{ age: string; name: string }> = {
-  age: { _gte: { value: 30, message: "" }, _lte: { value: 50, message: "" } },
-  name: { _ilike: { value: "John%", message: "" } },
+  age: { _gte: { value: 30 }, _lte: { value: 50 } },
+  name: { _ilike: { value: "John%" } },
 };
 
 const data = {
-  age: 35,
+  age: 34,
   name: "John Doe",
 };
 
-const result = evaluateWhereFilters(whereFilters, data);
+const result = getStuff(whereFilters, data);
 
 console.log(result); // Output: true
