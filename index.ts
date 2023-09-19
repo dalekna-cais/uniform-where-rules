@@ -1,5 +1,23 @@
 import { pathOr } from "./utils";
 
+type Message = { key: string; message: string };
+function evaluateMessage(
+  messages: Message[],
+  key: string,
+  operator: Operators
+) {
+  const defaultMessage = `Validation failed for field "${key}" with operator ${operator}`;
+  return (condition: boolean, message?: string) => {
+    if (condition) {
+      messages.push({ key, message: message ?? defaultMessage });
+      return false;
+    } else {
+      //
+      return true;
+    }
+  };
+}
+
 type Operators =
   | "_eq"
   | "_neq"
@@ -18,29 +36,30 @@ type ConditionValue = {
   message?: string;
 };
 
-type WhereCondition<FormValues extends Record<string, any>> =
-  NestedWhereFilters<FormValues> &
+type WhereCondition<FieldIdentifiers extends Record<string, any>> =
+  NestedWhereFilters<FieldIdentifiers> &
     Partial<
-      Record<keyof FormValues, Partial<Record<Operators, ConditionValue>>>
+      Record<keyof FieldIdentifiers, Partial<Record<Operators, ConditionValue>>>
     >;
 
-type NestedWhereFilters<FormValues extends Record<string, any>> = {
-  _and?: WhereCondition<FormValues>[];
-  _or?: WhereCondition<FormValues>[];
-  _not?: WhereCondition<FormValues>;
+type NestedWhereFilters<FieldIdentifiers extends Record<string, any>> = {
+  _and?: WhereCondition<FieldIdentifiers>[];
+  _or?: WhereCondition<FieldIdentifiers>[];
+  _not?: WhereCondition<FieldIdentifiers>[];
 };
 
-type WhereInput<FormValues extends Record<string, any>> =
-  NestedWhereFilters<FormValues> & WhereCondition<FormValues>;
+type WhereInput<
+  FieldIdentifiers extends Record<string, any> = Record<string, any>
+> = NestedWhereFilters<FieldIdentifiers> & WhereCondition<FieldIdentifiers>;
 
-function getStuff<FormValues extends Record<string, any>>(
-  where: WhereInput<FormValues>,
+function executeStuff<FieldIdentifiers extends Record<string, any>>(
+  where: WhereInput<FieldIdentifiers>,
   data: Record<string, any>
 ) {
-  const messages: string[] = [];
+  const messages: Message[] = [];
 
-  function evaluateWhereFilters<FormValues extends Record<string, any>>(
-    where: WhereInput<FormValues>,
+  function evaluateWhereFilters<FieldIdentifiers extends Record<string, any>>(
+    where: WhereInput<FieldIdentifiers>,
     data: Record<string, any>
   ): boolean {
     if (where._and) {
@@ -54,7 +73,9 @@ function getStuff<FormValues extends Record<string, any>>(
       );
     }
     if (where._not) {
-      return !evaluateWhereFilters(where._not, data);
+      return where._not.every((condition) =>
+        evaluateWhereFilters(condition, data)
+      );
     }
 
     // TODO: all other that starts with _
@@ -71,63 +92,115 @@ function getStuff<FormValues extends Record<string, any>>(
           const condition = fieldConditions[operator];
           if (!condition) break;
           const conditionValue = condition.value;
-          const defaultMessage = `Validation failed for field "${key}" with operator ${operator}`;
+          const getMessage = evaluateMessage(messages, key, operator);
 
           switch (operator) {
             case "_eq":
-              if (fieldValue !== conditionValue) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                fieldValue !== conditionValue,
+                condition.message
+              );
+              // if (fieldValue !== conditionValue) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_neq":
-              if (fieldValue === conditionValue) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                fieldValue === conditionValue,
+                condition.message
+              );
+              // if (fieldValue === conditionValue) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_lt":
-              if (!(fieldValue < conditionValue)) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                !(fieldValue < conditionValue),
+                condition.message
+              );
+              // if (!(fieldValue < conditionValue)) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_lte":
-              if (!(fieldValue <= conditionValue)) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                !(fieldValue <= conditionValue),
+                condition.message
+              );
+              // if (!(fieldValue <= conditionValue)) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_gt":
-              if (!(fieldValue > conditionValue)) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                !(fieldValue > conditionValue),
+                condition.message
+              );
+              // if (!(fieldValue > conditionValue)) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_gte":
-              if (!(fieldValue >= conditionValue)) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                !(fieldValue >= conditionValue),
+                condition.message
+              );
+              // if (!(fieldValue >= conditionValue)) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_in":
-              if (!conditionValue.includes(fieldValue)) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                !conditionValue.includes(fieldValue),
+                condition.message
+              );
+              // if (!conditionValue.includes(fieldValue)) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_nin":
-              if (conditionValue.includes(fieldValue)) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                conditionValue.includes(fieldValue),
+                condition.message
+              );
+              // if (conditionValue.includes(fieldValue)) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_is_null":
-              if (fieldValue !== null) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(fieldValue !== null, condition.message);
+              // if (fieldValue !== null) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_like":
-              if (!new RegExp(conditionValue).test(fieldValue)) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                !new RegExp(conditionValue).test(fieldValue),
+                condition.message
+              );
+              // if (!new RegExp(conditionValue).test(fieldValue)) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             case "_ilike":
-              if (!new RegExp(conditionValue, "i").test(fieldValue)) {
-                messages.push(condition.message ?? defaultMessage);
-              }
+              return getMessage(
+                !new RegExp(conditionValue, "i").test(fieldValue),
+                condition.message
+              );
+              // if (!new RegExp(conditionValue, "i").test(fieldValue)) {
+              //   messages.push(condition.message ?? defaultMessage);
+              //   return false;
+              // }
               break;
             default:
               break;
@@ -136,17 +209,17 @@ function getStuff<FormValues extends Record<string, any>>(
       }
     }
 
-    return messages.every(Boolean);
+    return false;
   }
 
-  evaluateWhereFilters(where, data);
+  const allPassed = evaluateWhereFilters(where, data);
 
-  return messages;
+  return { allPassed, messages };
 }
 
-const whereFilters: WhereInput<{ age: string; name: string }> = {
+const whereFilters: WhereInput = {
   age: { _gte: { value: 30 }, _lte: { value: 50 } },
-  name: { _ilike: { value: "John%" } },
+  name: { _ilike: { value: "Kobra%" } },
 };
 
 const data = {
@@ -154,6 +227,6 @@ const data = {
   name: "John Doe",
 };
 
-const result = getStuff(whereFilters, data);
+const result = executeStuff(whereFilters, data);
 
 console.log(result); // Output: true
