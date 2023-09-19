@@ -1,11 +1,7 @@
 import { pathOr } from "./utils";
 
 type Message = { key: string; message: string };
-function evaluateMessage(
-  messages: Message[],
-  key: string,
-  operator: Operators
-) {
+function startMessage(messages: Message[], key: string, operator: Operators) {
   const defaultMessage = `Validation failed for field "${key}" with operator ${operator}`;
   return (condition: boolean, message?: string) => {
     if (condition) {
@@ -30,6 +26,29 @@ type Operators =
   | "_is_null"
   | "_like"
   | "_ilike";
+
+const operatorsFns: Record<
+  Operators,
+  (fieldValue: any, conditionValue: any) => boolean
+> = {
+  _eq: (fieldValue: any, conditionValue: any) => fieldValue === conditionValue,
+  _neq: (fieldValue: any, conditionValue: any) => fieldValue !== conditionValue,
+  _lt: (fieldValue: any, conditionValue: any) => !(fieldValue < conditionValue),
+  _lte: (fieldValue: any, conditionValue: any) =>
+    !(fieldValue <= conditionValue),
+  _gt: (fieldValue: any, conditionValue: any) => !(fieldValue > conditionValue),
+  _gte: (fieldValue: any, conditionValue: any) =>
+    !(fieldValue >= conditionValue),
+  _in: (fieldValue: any, conditionValue: any) =>
+    !conditionValue.includes(fieldValue),
+  _nin: (fieldValue: any, conditionValue: any) =>
+    conditionValue.includes(fieldValue),
+  _is_null: (fieldValue: any, conditionValue: any) => fieldValue !== null,
+  _like: (fieldValue: any, conditionValue: any) =>
+    !new RegExp(conditionValue).test(fieldValue),
+  _ilike: (fieldValue: any, conditionValue: any) =>
+    !new RegExp(conditionValue, "i").test(fieldValue),
+};
 
 type ConditionValue = {
   value: any;
@@ -92,119 +111,12 @@ function executeStuff<FieldIdentifiers extends Record<string, any>>(
           const condition = fieldConditions[operator];
           if (!condition) break;
           const conditionValue = condition.value;
-          const getMessage = evaluateMessage(messages, key, operator);
-
-          switch (operator) {
-            case "_eq":
-              return getMessage(
-                fieldValue !== conditionValue,
-                condition.message
-              );
-              // if (fieldValue !== conditionValue) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_neq":
-              return getMessage(
-                fieldValue === conditionValue,
-                condition.message
-              );
-              // if (fieldValue === conditionValue) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_lt":
-              return getMessage(
-                !(fieldValue < conditionValue),
-                condition.message
-              );
-              // if (!(fieldValue < conditionValue)) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_lte":
-              return getMessage(
-                !(fieldValue <= conditionValue),
-                condition.message
-              );
-              // if (!(fieldValue <= conditionValue)) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_gt":
-              return getMessage(
-                !(fieldValue > conditionValue),
-                condition.message
-              );
-              // if (!(fieldValue > conditionValue)) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_gte":
-              return getMessage(
-                !(fieldValue >= conditionValue),
-                condition.message
-              );
-              // if (!(fieldValue >= conditionValue)) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_in":
-              return getMessage(
-                !conditionValue.includes(fieldValue),
-                condition.message
-              );
-              // if (!conditionValue.includes(fieldValue)) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_nin":
-              return getMessage(
-                conditionValue.includes(fieldValue),
-                condition.message
-              );
-              // if (conditionValue.includes(fieldValue)) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_is_null":
-              return getMessage(fieldValue !== null, condition.message);
-              // if (fieldValue !== null) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_like":
-              return getMessage(
-                !new RegExp(conditionValue).test(fieldValue),
-                condition.message
-              );
-              // if (!new RegExp(conditionValue).test(fieldValue)) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            case "_ilike":
-              return getMessage(
-                !new RegExp(conditionValue, "i").test(fieldValue),
-                condition.message
-              );
-              // if (!new RegExp(conditionValue, "i").test(fieldValue)) {
-              //   messages.push(condition.message ?? defaultMessage);
-              //   return false;
-              // }
-              break;
-            default:
-              break;
-          }
+          const operatorFn = operatorsFns[operator];
+          const evaluateMessage = startMessage(messages, key, operator);
+          return evaluateMessage(
+            operatorFn(fieldValue, conditionValue),
+            condition.message
+          );
         }
       }
     }
