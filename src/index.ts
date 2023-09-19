@@ -3,6 +3,7 @@ import { pathOr } from "./utils";
 type Message = { key: string; message?: string; passed: boolean };
 function startMessage(key: string, operator: Operators) {
   const defaultMessage = `Validation failed for field "${key}" with operator ${operator}`;
+
   return (condition: boolean, message?: string): Message | undefined => {
     if (condition) {
       return { key, message: message ?? defaultMessage, passed: false };
@@ -27,22 +28,29 @@ const operatorsFns: Record<
   Operators,
   (fieldValue: any, conditionValue: any) => boolean
 > = {
-  _eq: (fieldValue: any, conditionValue: any) => fieldValue === conditionValue,
-  _neq: (fieldValue: any, conditionValue: any) => fieldValue !== conditionValue,
-  _lt: (fieldValue: any, conditionValue: any) => !(fieldValue < conditionValue),
-  _lte: (fieldValue: any, conditionValue: any) =>
-    !(fieldValue <= conditionValue),
-  _gt: (fieldValue: any, conditionValue: any) => !(fieldValue > conditionValue),
-  _gte: (fieldValue: any, conditionValue: any) =>
-    !(fieldValue >= conditionValue),
-  _in: (fieldValue: any, conditionValue: any) =>
-    !conditionValue.includes(fieldValue),
-  _nin: (fieldValue: any, conditionValue: any) =>
-    conditionValue.includes(fieldValue),
-  _is_null: (fieldValue: any, conditionValue: any) => fieldValue !== null,
-  _like: (fieldValue: any, conditionValue: any) =>
+  // Checks if the field value is equal to the condition value
+  _eq: (fieldValue, conditionValue) => fieldValue === conditionValue,
+  // Checks if the field value is not equal to the condition value
+  _neq: (fieldValue, conditionValue) => fieldValue !== conditionValue,
+  // Checks if the field value is not less than the condition value
+  _lt: (fieldValue, conditionValue) => !(fieldValue < conditionValue),
+  // Checks if the field value is not less than or equal to the condition value
+  _lte: (fieldValue, conditionValue) => !(fieldValue <= conditionValue),
+  // Checks if the field value is not greater than the condition value
+  _gt: (fieldValue, conditionValue) => !(fieldValue > conditionValue),
+  // Checks if the field value is not greater than or equal to the condition value
+  _gte: (fieldValue, conditionValue) => !(fieldValue >= conditionValue),
+  // Checks if the field value is not included in the condition value
+  _in: (fieldValue, conditionValue) => !conditionValue.includes(fieldValue),
+  // Checks if the field value is included in the condition value
+  _nin: (fieldValue, conditionValue) => conditionValue.includes(fieldValue),
+  // Checks if the field value is not null
+  _is_null: (fieldValue, conditionValue) => fieldValue !== null,
+  // Checks if the field value does not match the regular expression provided in the condition value
+  _like: (fieldValue, conditionValue) =>
     !new RegExp(conditionValue).test(fieldValue),
-  _ilike: (fieldValue: any, conditionValue: any) =>
+  // Checks if the field value does not match the case-insensitive regular expression provided in the condition value
+  _ilike: (fieldValue, conditionValue) =>
     !new RegExp(conditionValue, "i").test(fieldValue),
 };
 
@@ -58,8 +66,11 @@ type WhereCondition<FieldIdentifiers extends Record<string, any>> =
     >;
 
 type NestedWhereFilters<FieldIdentifiers extends Record<string, any>> = {
+  /** Defines an array of nested conditions where all conditions must evaluate to true. */
   _and?: WhereCondition<FieldIdentifiers>[];
+  /** Defines an array of nested conditions where at least one condition must evaluate to true. */
   _or?: WhereCondition<FieldIdentifiers>[];
+  /** Defines an array of nested conditions where all conditions must evaluate to false. */
   _not?: WhereCondition<FieldIdentifiers>[];
 };
 
@@ -92,17 +103,14 @@ export function evaluateWhereFilters<
     };
   }
   if (where._not) {
-    // TODO: fix this, currently invalid, need to reverse result
     const result = where._not.map((condition) =>
       evaluateWhereFilters(condition, data)
     );
     return {
       messages: result.flatMap((r) => r.messages),
-      allPassed: result.flatMap((r) => r.allPassed).every(Boolean),
+      allPassed: result.flatMap((r) => r.allPassed).every((passed) => !passed),
     };
   }
-
-  // TODO: all other that starts with _
 
   const messages: (Message | undefined)[] = [];
   const fieldKeys = Object.keys(where).filter((key) => !key.startsWith("_"));
@@ -128,5 +136,5 @@ export function evaluateWhereFilters<
     }
   }
 
-  return { messages, allPassed: messages.every(Boolean) };
+  return { messages, allPassed: messages.filter(Boolean).length === 0 };
 }
