@@ -211,7 +211,7 @@ describe("evaluateWhereFilters", () => {
         },
         {
           field2: {
-            _gt: { value: 20 },
+            _gt: { value: 21 },
           },
         },
       ],
@@ -219,7 +219,7 @@ describe("evaluateWhereFilters", () => {
 
     const data = {
       field1: 20,
-      field2: 10,
+      field2: 22,
     };
 
     const result = evaluateWhereFilters(where, data);
