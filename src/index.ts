@@ -1,12 +1,12 @@
 import { pathOr } from "./utils";
 
-type Message = { key: string; message?: string; passed: boolean };
+type Message = { key: string; message?: string };
 function startMessage(key: string, operator: Operators) {
   const defaultMessage = `Validation failed for field "${key}" with operator ${operator}`;
 
   return (condition: boolean, message?: string): Message | undefined => {
     if (condition) {
-      return { key, message: message ?? defaultMessage, passed: false };
+      return { key, message: message ?? defaultMessage };
     }
   };
 }
@@ -24,14 +24,15 @@ type Operators =
   | "_like"
   | "_ilike";
 
+/** each condition is specifically prepared for an if statement, if(condition) */
 const operatorsFns: Record<
   Operators,
   (fieldValue: any, conditionValue: any) => boolean
 > = {
   // Checks if the field value is equal to the condition value
-  _eq: (fieldValue, conditionValue) => fieldValue === conditionValue,
+  _eq: (fieldValue, conditionValue) => fieldValue !== conditionValue,
   // Checks if the field value is not equal to the condition value
-  _neq: (fieldValue, conditionValue) => fieldValue !== conditionValue,
+  _neq: (fieldValue, conditionValue) => fieldValue === conditionValue,
   // Checks if the field value is not less than the condition value
   _lt: (fieldValue, conditionValue) => !(fieldValue < conditionValue),
   // Checks if the field value is not less than or equal to the condition value
@@ -131,6 +132,7 @@ export function evaluateWhereFilters<
           operatorFn(fieldValue, conditionValue),
           condition.message
         );
+        console.log(message);
         messages.push(message);
       }
     }

@@ -2,28 +2,16 @@ import { evaluateWhereFilters } from "./index";
 
 describe("evaluateWhereFilters", () => {
   it("should return true", () => {
-    const whereFilters = {
+    const where = {
       age: { _gte: { value: 30 }, _lte: { value: 50 } },
       name: { _ilike: { value: "John" } },
     };
-
     const data = {
       age: 34,
       name: "John Doe",
     };
-
-    const result = evaluateWhereFilters(whereFilters, data);
-
-    expect(result).toMatchInlineSnapshot(`
-{
-  "allPassed": true,
-  "messages": [
-    undefined,
-    undefined,
-    undefined,
-  ],
-}
-`);
+    const result = evaluateWhereFilters(where, data);
+    expect(result.allPassed).toBe(true);
   });
 
   it("should return true for _eq operator if field value is equal to the condition value", () => {
@@ -143,7 +131,7 @@ describe("evaluateWhereFilters", () => {
     expect(result.allPassed).toBe(true);
   });
 
-  it("should return true for _is_null operator if field value is not null", () => {
+  it("should return false for _is_null operator if field value is not null", () => {
     const where = {
       field: {
         _is_null: { value: null },
@@ -155,10 +143,10 @@ describe("evaluateWhereFilters", () => {
     };
 
     const result = evaluateWhereFilters(where, data);
-    expect(result.allPassed).toBe(true);
+    expect(result.allPassed).toBe(false);
   });
 
-  it("should return true for _like operator if field value does not match the condition value regex", () => {
+  it("should return false for _like operator if field value does not match the condition value regex", () => {
     const where = {
       field: {
         _like: { value: "^abc" },
@@ -170,10 +158,10 @@ describe("evaluateWhereFilters", () => {
     };
 
     const result = evaluateWhereFilters(where, data);
-    expect(result.allPassed).toBe(true);
+    expect(result.allPassed).toBe(false);
   });
 
-  it("should return true for _ilike operator if field value does not match the condition value regex case-insensitively", () => {
+  it("should return false for _ilike operator if field value does not match the condition value regex case-insensitively", () => {
     const where = {
       field: {
         _ilike: { value: "^abc" },
@@ -185,7 +173,7 @@ describe("evaluateWhereFilters", () => {
     };
 
     const result = evaluateWhereFilters(where, data);
-    expect(result.allPassed).toBe(true);
+    expect(result.allPassed).toBe(false);
   });
 
   it("should return true for nested _and condition if both conditions are true", () => {
