@@ -32,7 +32,7 @@ type Operators =
   | "_starts_with"
   | "_ends_with";
 
-type NestedOperators = "_and" | "_or" | "_not";
+type LogicalOperators = "_and" | "_or" | "_not";
 
 const operatorsFns: Record<
   Operators,
@@ -82,23 +82,16 @@ type ConditionValue = {
   message?: string;
 };
 
-export type WhereOperators = Partial<Record<Operators, ConditionValue>>;
+export type OperatorsLayer = Partial<Record<Operators, ConditionValue>>;
 
-type NestedWhereOperators<TPossibleEntries extends keyof any> = Partial<
-  Record<
-    NestedOperators,
-    Array<
-      WhereOperators &
-        NestedWhereOperators<TPossibleEntries> &
-        Partial<Record<TPossibleEntries, WhereOperators>>
-    >
-  >
+type LogicalOperatorsLayer<TPossibleEntries extends keyof UniformAny> = Partial<
+  Record<LogicalOperators, Array<WhereInput<TPossibleEntries>>>
 >;
 
-export type WhereInput<TPossibleEntries extends keyof any> =
-  NestedWhereOperators<TPossibleEntries> &
-    WhereOperators &
-    Partial<Record<TPossibleEntries, WhereOperators>>;
+export type WhereInput<TPossibleEntries extends keyof UniformAny> =
+  OperatorsLayer &
+    LogicalOperatorsLayer<TPossibleEntries> &
+    Partial<Record<TPossibleEntries, OperatorsLayer>>;
 
 export function evaluateWhereFilters<TPossibleEntries extends keyof any>(
   where: WhereInput<TPossibleEntries>,
@@ -189,7 +182,7 @@ type Stuff = {
 };
 
 const test: WhereInput<keyof Stuff> = {
-  _and: [{ _and: [{ _eq: { value: "test", message: "asdasdas" } }] }],
+  _and: [{ _and: [{ _eq: { value: "test", message: "asd" } }] }],
   _lt: { value: "test", message: "test" },
   _or: [{ _eq: { value: "test", message: "asd" } }],
   goodbye: { _contains: { value: "test" } },
