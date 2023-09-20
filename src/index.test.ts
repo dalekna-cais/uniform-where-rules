@@ -1,4 +1,4 @@
-import { evaluateWhereFilters } from "./index";
+import { WhereInput, evaluateWhereFilters } from "./index";
 
 describe("evaluateWhereFilters", () => {
   it("should return true", () => {
@@ -177,7 +177,7 @@ describe("evaluateWhereFilters", () => {
   });
 
   it("should return true for nested _and condition if both conditions are true", () => {
-    const where = {
+    const where: WhereInput<keyof { field1: string; field2: string }> = {
       _and: [
         {
           field1: {
@@ -202,7 +202,7 @@ describe("evaluateWhereFilters", () => {
   });
 
   it("should return true for nested _or condition if any one condition is true", () => {
-    const where = {
+    const where: WhereInput<keyof { field1: string; field2: string }> = {
       _or: [
         {
           field1: {

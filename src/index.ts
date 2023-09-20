@@ -1,5 +1,7 @@
 import { pathOr } from "./utils";
 
+type UniformAny = any;
+
 type Message = { key: string; message?: string };
 function startMessage(key: string, operator: Operators) {
   const defaultMessage = `Validation failed for field "${key}" with operator ${operator}`;
@@ -8,6 +10,7 @@ function startMessage(key: string, operator: Operators) {
     if (!condition) {
       return { key, message: message ?? defaultMessage };
     }
+    return undefined;
   };
 }
 
@@ -29,9 +32,11 @@ type Operators =
   | "_starts_with"
   | "_ends_with";
 
+type NestedOperators = "_and" | "_or" | "_not";
+
 const operatorsFns: Record<
   Operators,
-  (fieldValue: any, conditionValue: any) => boolean
+  (fieldValue: UniformAny, conditionValue: UniformAny) => boolean
 > = {
   // Checks if the field value is equal to the condition value
   _eq: (fieldValue, conditionValue) => fieldValue === conditionValue,
@@ -73,34 +78,32 @@ const operatorsFns: Record<
 };
 
 type ConditionValue = {
-  value: any;
+  value: UniformAny;
   message?: string;
 };
 
-type WhereCondition<FieldIdentifiers extends Record<string, any>> =
-  NestedWhereFilters<FieldIdentifiers> &
-    Partial<
-      Record<keyof FieldIdentifiers, Partial<Record<Operators, ConditionValue>>>
-    >;
+export type WhereOperators = Partial<Record<Operators, ConditionValue>>;
 
-type NestedWhereFilters<FieldIdentifiers extends Record<string, any>> = {
-  /** Defines an array of nested conditions where all conditions must evaluate to true. */
-  _and?: WhereCondition<FieldIdentifiers>[];
-  /** Defines an array of nested conditions where at least one condition must evaluate to true. */
-  _or?: WhereCondition<FieldIdentifiers>[];
-  /** Defines an array of nested conditions where all conditions must evaluate to false. */
-  _not?: WhereCondition<FieldIdentifiers>[];
-};
+type NestedWhereOperators<TPossibleEntries extends keyof any> = Partial<
+  Record<
+    NestedOperators,
+    Array<
+      WhereOperators &
+        NestedWhereOperators<TPossibleEntries> &
+        Partial<Record<TPossibleEntries, WhereOperators>>
+    >
+  >
+>;
 
-type WhereInput<
-  FieldIdentifiers extends Record<string, any> = Record<string, any>
-> = NestedWhereFilters<FieldIdentifiers> & WhereCondition<FieldIdentifiers>;
+export type WhereInput<TPossibleEntries extends keyof any> =
+  NestedWhereOperators<TPossibleEntries> &
+    WhereOperators &
+    Partial<Record<TPossibleEntries, WhereOperators>>;
 
-export function evaluateWhereFilters<
-  FieldIdentifiers extends Record<string, any>
->(
-  where: WhereInput<FieldIdentifiers>,
-  data: Record<string, any>
+export function evaluateWhereFilters<TPossibleEntries extends keyof any>(
+  where: WhereInput<TPossibleEntries>,
+  data: Record<string, UniformAny>,
+  key: string = ""
 ): { messages: (Message | undefined)[]; allPassed: boolean } {
   if (where._and) {
     const result = where._and.map((condition) =>
@@ -134,7 +137,11 @@ export function evaluateWhereFilters<
   const fieldKeys = Object.keys(where).filter((key) => !key.startsWith("_"));
 
   for (const key of fieldKeys) {
-    const fieldConditions = where[key];
+    const whereQuery = where as Record<
+      string,
+      Partial<Record<Operators, ConditionValue>>
+    >;
+    const fieldConditions = whereQuery[key];
     if (fieldConditions) {
       const fieldValue = pathOr("", key.split("."), data);
       const operatorKeys = Object.keys(fieldConditions) as Operators[];
@@ -149,11 +156,41 @@ export function evaluateWhereFilters<
           operatorFn(fieldValue, conditionValue),
           condition.message
         );
-        console.log(message);
         messages.push(message);
       }
     }
   }
 
+  const fieldOperators = Object.keys(where).filter((key) =>
+    key.startsWith("_")
+  );
+
+  for (const operator of fieldOperators) {
+    const whereQuery = where as Record<Operators, ConditionValue>;
+    const fieldConditions = whereQuery[operator as Operators];
+    const condition = fieldConditions;
+    const conditionValue = condition.value;
+    const operatorFn = operatorsFns[operator as Operators];
+    const fieldValue = pathOr("", key.split("."), data);
+    const evaluateMessage = startMessage(key, operator as Operators);
+    const message = evaluateMessage(
+      operatorFn(fieldValue, conditionValue),
+      condition.message
+    );
+    messages.push(message);
+  }
+
   return { messages, allPassed: messages.filter(Boolean).length === 0 };
 }
+
+type Stuff = {
+  hello: string;
+  goodbye: string;
+};
+
+const test: WhereInput<keyof Stuff> = {
+  _and: [{ _and: [{ _eq: { value: "test", message: "asdasdas" } }] }],
+  _lt: { value: "test", message: "test" },
+  _or: [{ _eq: { value: "test", message: "asd" } }],
+  goodbye: { _contains: { value: "test" } },
+};
